@@ -1,8 +1,0 @@
-name: ping-test
-on: workflow_dispatch
-jobs:
-  ping:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: hello
-        run: echo "ping ok"
