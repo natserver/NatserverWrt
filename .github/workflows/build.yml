@@ -1,0 +1,111 @@
+name: Build FanchmWrt RE-SS-01 + daed
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+  # 打 tag 如 v1.0 自动发 Release
+  # git tag v1.0 && git push origin v1.0
+
+env:
+  REPO_URL: https://github.com/fanchmwrt/fanchmwrt-snapshot.git
+  REPO_BRANCH: fanchmwrt-26.05
+  CONFIG_FILE: config/re-ss-01-daed.config
+  DIY_P1_SH: scripts/diy-part1.sh
+  DIY_P2_SH: scripts/diy-part2.sh
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout 本仓库(工作流+配置)
+      uses: actions/checkout@v4
+
+    - name: 初始化编译环境
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        sudo docker image prune --all --force
+        sudo -E apt-get -qq update
+        sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+          bzip2 ccache clang cmake cpio curl device-tree-compiler ecj fastjar flex gawk gettext git gperf haveged \
+          help2man intltool libacl1-dev libattr1-dev libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev \
+          libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev \
+          libtool libz-dev lld llvm lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf \
+          python3 python3-pip python3-ply python3-docutils qemu-utils rsync scons squashfs-tools subversion \
+          swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd yasm zlib1g-dev zstd
+        sudo -E apt-get -qq autoremove --purge
+        sudo -E apt-get -qq clean
+        sudo timedatectl set-timezone "$TZ"
+        df -h
+
+    - name: 克隆 fanchmwrt-snapshot 源码
+      run: |
+        git clone --depth 1 --branch $REPO_BRANCH $REPO_URL openwrt
+        ln -sf ../$CONFIG_FILE openwrt/.config || cp $CONFIG_FILE openwrt/.config
+        ls -lh openwrt/ | head -30
+
+    - name: 自定义 feeds (diy-part1, 加 daed 源)
+      run: |
+        chmod +x $DIY_P1_SH
+        cd openwrt
+        ../$DIY_P1_SH
+
+    - name: 更新并安装 feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: 自定义配置 (diy-part2)
+      run: |
+        chmod +x $DIY_P2_SH
+        cd openwrt
+        ../$DIY_P2_SH
+        # 把 config 目录的完整 .config 拷进去并展开
+        cp ../$CONFIG_FILE .config
+        make defconfig
+        echo "===== 生效的关键配置 ====="
+        grep -E "jdcloud_re-ss-01|TARGET_qualcommax|PACKAGE_(dae|daed|luci-app-daede)|KERNEL_DEBUG_INFO_BTF|KERNEL_BPF_EVENTS|KERNEL_XDP_SOCKETS|v2ray-geo|vmlinux-btf|kmod-sched-bpf|kmod-veth" .config || true
+
+    - name: 下载源码包 (make download)
+      run: |
+        cd openwrt
+        make download -j$(nproc)
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+
+    - name: 编译固件
+      run: |
+        cd openwrt
+        echo -e "$(nproc) thread compile"
+        make -j$(($(nproc)+1)) || make -j1 V=s
+        echo "BUILD_STATUS=success" >> $GITHUB_ENV
+
+    - name: 整理固件
+      if: env.BUILD_STATUS == 'success'
+      run: |
+        cd openwrt
+        mkdir -p ../firmware
+        # 只保留 RE-SS-01 相关固件 + dae/daed 包, 避免 artifact 过大
+        find bin/targets/qualcommax/ipq60xx/ -type f \( -name "*re-ss-01*" -o -name "*.manifest" -o -name "config.buildinfo" \) -exec cp -v {} ../firmware/ \;
+        # 打包 dae/daed 的 ipk/apks (snapshot 默认是 apk)
+        find bin/packages/ -type f \( -name "dae_*" -o -name "daed_*" -o -name "luci-app-daede*" -o -name "luci-i18n-daede*" -o -name "vmlinux-btf*" -o -name "v2ray-geo*" \) 2>/dev/null -exec cp -v {} ../firmware/ \; || true
+        ls -lh ../firmware/
+
+    - name: 上传固件到 Artifact
+      uses: actions/upload-artifact@v4
+      if: env.BUILD_STATUS == 'success'
+      with:
+        name: fanchmwrt-re-ss-01-daed
+        path: firmware/*
+
+    - name: 发布到 Release (仅 tag 触发)
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/') && env.BUILD_STATUS == 'success'
+      with:
+        files: firmware/*
+        generate_release_notes: true
