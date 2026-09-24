@@ -27,8 +27,12 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-        sudo docker image prune --all --force
+        # 彻底释放 runner 磁盘 (保留 clang/node/runner 本体)
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/powershell \
+          /usr/local/share/swift /usr/local/share/edge_driver /opt/hostedtoolcache \
+          /usr/local/lib/node_modules /usr/local/typescript /usr/local/go /home/linuxbrew \
+          /usr/local/.cache /usr/include/c++ /etc/apt/sources.list.d/*
+        sudo docker image prune --all --force 2>/dev/null || true
         sudo -E apt-get -qq update
         sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
           bzip2 ccache clang cmake cpio curl device-tree-compiler ecj fastjar flex gawk gettext git gperf haveged \
