@@ -83,7 +83,8 @@ jobs:
         check "^CONFIG_PACKAGE_dae=y"
         check "^CONFIG_PACKAGE_daed=y"
         check "^CONFIG_PACKAGE_luci-app-daede=y"
-        check "^CONFIG_PACKAGE_vmlinux-btf=y"
+        # vmlinux-btf 可 =y 也可 =m: 内核 BTF 生效后它只是备用安装包
+        check "^CONFIG_PACKAGE_vmlinux-btf=[ym]"
         check "^CONFIG_PACKAGE_kmod-sched-bpf=y"
         check "^CONFIG_PACKAGE_v2ray-geoip=y"
         if [ "$fail" -ne 0 ]; then echo "ERROR: defconfig 后关键配置丢失"; exit 1; fi
