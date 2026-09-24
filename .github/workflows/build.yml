@@ -91,6 +91,13 @@ jobs:
         check "^CONFIG_PACKAGE_vmlinux-btf=[ym]"
         check "^CONFIG_PACKAGE_kmod-sched-bpf=y"
         check "^CONFIG_PACKAGE_v2ray-geoip=y"
+        check "^CONFIG_KERNEL_CGROUPS=y"
+        # RE-SS-01 必须是 12M 内核分区 (diy-part2 打的 HLOS12M 补丁), 否则 FIT 超限
+        if sed -n '/^define Device\/jdcloud_re-ss-01$/,/^endef$/p' target/linux/qualcommax/image/ipq60xx.mk | grep -q 'KERNEL_SIZE := 12288k'; then
+          echo "OK: RE-SS-01 KERNEL_SIZE := 12288k"
+        else
+          echo "FAIL: RE-SS-01 KERNEL_SIZE != 12288k"; fail=1
+        fi
         if [ "$fail" -ne 0 ]; then echo "ERROR: defconfig 后关键配置丢失"; exit 1; fi
         echo "所有关键配置校验通过"
 
