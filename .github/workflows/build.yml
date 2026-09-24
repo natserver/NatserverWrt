@@ -45,7 +45,6 @@ jobs:
     - name: 克隆 fanchmwrt-snapshot 源码
       run: |
         git clone --depth 1 --branch $REPO_BRANCH $REPO_URL openwrt
-        ln -sf ../$CONFIG_FILE openwrt/.config || cp $CONFIG_FILE openwrt/.config
         ls -lh openwrt/ | head -30
 
     - name: 自定义 feeds (diy-part1, 加 daed 源)
@@ -65,7 +64,8 @@ jobs:
         chmod +x $DIY_P2_SH
         cd openwrt
         ../$DIY_P2_SH
-        # 把 config 目录的完整 .config 拷进去并展开
+        # 把 config 目录的完整 .config 拷进去并展开 (先删掉旧链接/文件避免 same file 报错)
+        rm -f .config
         cp ../$CONFIG_FILE .config
         make defconfig
         echo "===== 生效的关键配置 ====="
