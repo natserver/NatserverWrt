@@ -69,7 +69,10 @@ jobs:
         cp ../$CONFIG_FILE .config
         make defconfig
         echo "===== 生效的关键配置 ====="
-        grep -E "jdcloud_re-ss-01|TARGET_qualcommax|PACKAGE_(dae|daed|luci-app-daede)|KERNEL_DEBUG_INFO_BTF|KERNEL_BPF_EVENTS|KERNEL_XDP_SOCKETS|v2ray-geo|vmlinux-btf|kmod-sched-bpf|kmod-veth" .config || true
+        grep -E "jdcloud_re-ss-01|TARGET_qualcommax|BPF_TOOLCHAIN|PACKAGE_(dae|daed|luci-app-daede)|KERNEL_DEBUG_INFO_BTF|KERNEL_BPF_EVENTS|KERNEL_XDP_SOCKETS|v2ray-geo|vmlinux-btf|kmod-sched-bpf|kmod-veth" .config || true
+        echo "===== 主机 clang (BPF_TOOLCHAIN_HOST 要 >=12) ====="
+        which clang llc opt llvm-strip; clang --version | head -2
+        grep -q "CONFIG_BPF_TOOLCHAIN_HOST=y" .config || (echo "ERROR: BPF_TOOLCHAIN_HOST 未生效"; exit 1)
 
     - name: 下载源码包 (make download)
       run: |
