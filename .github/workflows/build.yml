@@ -1,14 +1,13 @@
 name: Build FanchmWrt RE-SS-01 + daed
 
 on:
+  # 手动触发 (仅测试/紧急用); 正常只由 schedule 在上游有更新时自动构建
   workflow_dispatch:
-  # 每天 UTC 17:30 (北京时间 01:30) 检查上游是否有更新
+  # 每 6 小时检查一次上游 (UTC 00:20/06:20/12:20/18:20 = 北京 08:20/14:20/20:20/02:20)
+  # 上游无更新时 check 直接跳过, 不会构建; 本仓库 push 不触发任何构建
   schedule:
-    - cron: '30 17 * * *'
-  push:
-    branches: [ main, master ]
-  # 每次构建成功都会自动创建/更新 Release, tag 形如 v20260925-abc1234
-  # (日期 + 上游短SHA, 同一上游版本不会产生重复发行版)
+    - cron: '20 */6 * * *'
+  # 构建成功自动创建 Release, tag 形如 v20260925-abc1234 (日期+上游短SHA, 同上游版本自动去重)
 
 env:
   REPO_URL: https://github.com/fanchmwrt/fanchmwrt-snapshot.git
@@ -41,7 +40,8 @@ jobs:
         TAG="v$(date -u +%Y%m%d)-${SHORT}"
         BUILD=true
         if [ "${{ github.event_name }}" = "schedule" ]; then
-          if gh release list --repo "$GITHUB_REPOSITORY" --limit 100 | grep -q "$SHORT"; then
+          # 比对 tag+标题+说明里是否已含上游短SHA (v1.0 是旧式tag, SHA在说明里, 所以查body)
+          if gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | (.tag_name, .name, .body)' | grep -q "$SHORT"; then
             BUILD=false
             echo "上游 $SHORT 已有对应发行版, 跳过本次构建"
           else
