@@ -185,15 +185,3 @@ jobs:
           JDCloud RE-SS-01 (AX1800 Pro) 一体固件, 基于 fanchmwrt-snapshot 26.05, 内置 daed 全家桶, 开箱即用。
 
           上游同步: fanchmwrt/fanchmwrt-snapshot@${{ needs.check.outputs.upstream }}
-
-          ## 内容
-          - **dae / daed / luci-app-daede 内置 rootfs**, 无需离线安装 .run
-          - v2ray-geoip / v2ray-geosite 内置; 附带 apk: luci-app-daede / vmlinux-btf / v2ray-geo* / ipq-wifi
-          - 内核 6.12.89, BTF / XDP / CGROUP_BPF / BPF_EVENTS 已开启, daed 走内核 BTF 模式
-          - KERNEL_SIZE=12288k (12MB 内核分区, 与 iStoreOS 同方案)
-
-          ## 刷机 (重要)
-          - **前提: 设备需已刷 HLOS12M GPT** (双启动 rootfs2048M, 模板见 GHNERCH/DAEWRT-AX1800PRO); 未刷过先刷 GPT
-          - 全新安装: U-Boot Web 端点 /big.html 刷 **factory.bin**
-          - 升级: 系统内 sysupgrade 刷 **sysupgrade.bin**
-          - initramfs-uImage.itb 供 tftp 救砖 / 免拆机启动
