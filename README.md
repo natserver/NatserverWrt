@@ -1,5 +1,10 @@
 # NatserverWrt for 京东云亚瑟 AX1800 Pro（RE-SS-01）
 
+## 内置软件
+
+- **eBPF / BTF 内核支持**：已开启 BTF、XDP、BPF Events、CGROUPS、BPF 工具链，并内置 daed 所需内核模块（kmod-sched-core / kmod-sched-bpf / kmod-veth / kmod-xdp-sockets-diag）；
+- **加强版 daed 已预装**：刷机即用，无需手动安装。
+
 ## 刷机流程
 
 1. 刷 **12M 大分区 U-Boot**（HLOS 12MiB）；
