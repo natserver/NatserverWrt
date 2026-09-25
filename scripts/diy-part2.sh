@@ -9,7 +9,7 @@ if ! grep -q '192\.168\.100\.1' package/base-files/files/bin/config_generate; th
   echo "ERROR: LAN 默认 IP 192.168.100.1 未生效" >&2; exit 1
 fi
 
-# 2. 默认主机名 -> NatserverWrt (LuCI 登录窗口/浏览器标签页标题都取 hostname)
+# 2. 默认主机名 -> NatserverWrt (顶栏侧边品牌等取 hostname)
 sed -i "s/hostname='[^']*'/hostname='NatserverWrt'/g" package/base-files/files/bin/config_generate
 if ! grep -q "hostname='NatserverWrt'" package/base-files/files/bin/config_generate; then
   echo "ERROR: hostname NatserverWrt 未生效" >&2; exit 1
@@ -42,5 +42,19 @@ if [ "$(grep -c 'KERNEL_SIZE := 12288k' target/linux/qualcommax/image/ipq60xx.mk
   exit 1
 fi
 echo "OK: RE-SS-01 KERNEL_SIZE := 12288k"
+
+# 6. 浏览器标签页标题 + 登录窗口大标题 (fanchmwrt 主题硬编码 FanchmWrt, 与 hostname 无关)
+sed -i 's|<title>FanchmWrt</title>|<title>NatserverWrt</title>|' package/fcm/luci-theme-fanchmwrt/ucode/template/themes/fanchmwrt/header.ut
+if ! grep -q '<title>NatserverWrt</title>' package/fcm/luci-theme-fanchmwrt/ucode/template/themes/fanchmwrt/header.ut; then
+  echo "ERROR: 浏览器标签 <title>NatserverWrt</title> 未生效 (header.ut 结构变了?)" >&2; exit 1
+fi
+sed -i "s/'FanchmWrt'/'NatserverWrt'/" package/fcm/luci-theme-fanchmwrt/htdocs/luci-static/resources/view/fanchmwrt/sysauth.js
+if ! grep -q "'NatserverWrt'" package/fcm/luci-theme-fanchmwrt/htdocs/luci-static/resources/view/fanchmwrt/sysauth.js; then
+  echo "ERROR: 登录窗口标题 NatserverWrt 未生效 (sysauth.js 结构变了?)" >&2; exit 1
+fi
+if grep -q "'FanchmWrt'" package/fcm/luci-theme-fanchmwrt/htdocs/luci-static/resources/view/fanchmwrt/sysauth.js; then
+  echo "ERROR: sysauth.js 仍残留 'FanchmWrt'" >&2; exit 1
+fi
+echo "OK: 标签页/登录窗口标题 -> NatserverWrt"
 
 echo "diy-part2 done"
