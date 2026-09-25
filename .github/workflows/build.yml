@@ -2,10 +2,13 @@ name: Build FanchmWrt RE-SS-01 + daed
 
 on:
   workflow_dispatch:
+  # 每天 UTC 17:30 (北京时间 01:30) 检查上游是否有更新
+  schedule:
+    - cron: '30 17 * * *'
   push:
     branches: [ main, master ]
-  # 打 tag 如 v1.0 自动发 Release
-  # git tag v1.0 && git push origin v1.0
+  # 每次构建成功都会自动创建/更新 Release, tag 形如 v20260925-abc1234
+  # (日期 + 上游短SHA, 同一上游版本不会产生重复发行版)
 
 env:
   REPO_URL: https://github.com/fanchmwrt/fanchmwrt-snapshot.git
@@ -15,8 +18,45 @@ env:
   DIY_P2_SH: scripts/diy-part2.sh
   TZ: Asia/Shanghai
 
+permissions:
+  contents: write
+
 jobs:
+  # 检查上游 fanchmwrt-snapshot 是否有新提交 (只在定时触发时跳过判断, 手动/push 总是构建)
+  check:
+    runs-on: ubuntu-22.04
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+      upstream: ${{ steps.check.outputs.upstream }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+    - name: 检查上游更新
+      id: check
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -eu
+        UP=$(git ls-remote "$REPO_URL" "refs/heads/$REPO_BRANCH" | head -1 | cut -f1)
+        SHORT="${UP:0:7}"
+        TAG="v$(date -u +%Y%m%d)-${SHORT}"
+        BUILD=true
+        if [ "${{ github.event_name }}" = "schedule" ]; then
+          if gh release list --repo "$GITHUB_REPOSITORY" --limit 100 | grep -q "$SHORT"; then
+            BUILD=false
+            echo "上游 $SHORT 已有对应发行版, 跳过本次构建"
+          else
+            echo "检测到上游更新: $UP"
+          fi
+        fi
+        echo "upstream=$UP" >> "$GITHUB_OUTPUT"
+        echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+        echo "build=$BUILD tag=$TAG upstream=$UP"
+
   build:
+    needs: check
+    if: needs.check.outputs.build == 'true'
+
     runs-on: ubuntu-22.04
 
     steps:
@@ -39,7 +79,7 @@ jobs:
           help2man intltool libacl1-dev libattr1-dev libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev \
           libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev \
           libtool libz-dev lld llvm lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf \
-          python3 python3-pip python3-ply python3-docutils qemu-utils rsync scons squashfs-tools subversion \
+          python3 python3-pip python3-ply python3-docutils qemu-utils rsync squashfs-tools subversion \
           swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd yasm zlib1g-dev zstd
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
@@ -133,9 +173,27 @@ jobs:
         name: fanchmwrt-re-ss-01-daed
         path: firmware/*
 
-    - name: 发布到 Release (仅 tag 触发)
+    - name: 发布到 Release
+      if: env.BUILD_STATUS == 'success'
       uses: softprops/action-gh-release@v2
-      if: startsWith(github.ref, 'refs/tags/') && env.BUILD_STATUS == 'success'
       with:
+        tag_name: ${{ needs.check.outputs.tag }}
+        name: RE-SS-01 + daed ${{ needs.check.outputs.tag }} (内置daed, 12M内核)
+        target_commitish: ${{ github.sha }}
         files: firmware/*
-        generate_release_notes: true
+        body: |
+          JDCloud RE-SS-01 (AX1800 Pro) 一体固件, 基于 fanchmwrt-snapshot 26.05, 内置 daed 全家桶, 开箱即用。
+
+          上游同步: fanchmwrt/fanchmwrt-snapshot@${{ needs.check.outputs.upstream }}
+
+          ## 内容
+          - **dae / daed / luci-app-daede 内置 rootfs**, 无需离线安装 .run
+          - v2ray-geoip / v2ray-geosite 内置; 附带 apk: luci-app-daede / vmlinux-btf / v2ray-geo* / ipq-wifi
+          - 内核 6.12.89, BTF / XDP / CGROUP_BPF / BPF_EVENTS 已开启, daed 走内核 BTF 模式
+          - KERNEL_SIZE=12288k (12MB 内核分区, 与 iStoreOS 同方案)
+
+          ## 刷机 (重要)
+          - **前提: 设备需已刷 HLOS12M GPT** (双启动 rootfs2048M, 模板见 GHNERCH/DAEWRT-AX1800PRO); 未刷过先刷 GPT
+          - 全新安装: U-Boot Web 端点 /big.html 刷 **factory.bin**
+          - 升级: 系统内 sysupgrade 刷 **sysupgrade.bin**
+          - initramfs-uImage.itb 供 tftp 救砖 / 免拆机启动
