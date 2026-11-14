@@ -57,4 +57,24 @@ if grep -q "'FanchmWrt'" package/fcm/luci-theme-fanchmwrt/htdocs/luci-static/res
 fi
 echo "OK: 标签页/登录窗口标题 -> NatserverWrt"
 
+# 7. 放开 GOTOOLCHAIN (2026-11-13 run 43382238766 失败的直接原因)
+#    上游 dae/daed 的 go.mod 已经写成 `go 1.27.0`, 而 26.05 分支固定的 packages feed
+#    只到 golang 1.26.3 (GO_DEFAULT_VERSION:=1.26, 没有 golang1.27 包); 更关键的是
+#    golang-package.mk 的 GO_PKG_BUILD_VARS 里硬编码 GOTOOLCHAIN=local, 于是 go 拒绝
+#    自动升级工具链, 直接报:
+#      go: go.mod requires go >= 1.27.0 (running go 1.26.3; GOTOOLCHAIN=local)
+#    改成 auto 后 1.26.3 会按需从 module proxy 拉 go1.27.x 工具链来编 dae/daed,
+#    其余 Go 包仍旧用 1.26.3, 不用动 packages feed 的版本, 改动面最小。
+GPM=feeds/packages/lang/golang/golang-package.mk
+if [ ! -f "$GPM" ]; then
+  echo "ERROR: 找不到 $GPM (feeds install 未完成?)" >&2; exit 1
+fi
+if grep -q 'GOTOOLCHAIN=local' "$GPM"; then
+  sed -i 's/GOTOOLCHAIN=local/GOTOOLCHAIN=auto/g' "$GPM"
+fi
+if ! grep -q 'GOTOOLCHAIN=auto' "$GPM"; then
+  echo "ERROR: GOTOOLCHAIN=auto 补丁未生效 ($GPM)" >&2; exit 1
+fi
+echo "OK: GOTOOLCHAIN -> $(grep -o 'GOTOOLCHAIN=[a-z]*' "$GPM" | head -1)"
+
 echo "diy-part2 done"

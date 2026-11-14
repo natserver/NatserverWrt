@@ -148,6 +148,14 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
+    # dae/daed 是整轮编译里最先碰 Go 的一批包, 历史失败都死在这里 (go 版本不满足)。
+    # 全量编译要 2 小时, 单独编这两个包 20 分钟内就能拿到 V=s 的真报错, 失败即止不浪费时间。
+    - name: 预编 dae/daed (Go 工具链快速闸门)
+      run: |
+        cd openwrt
+        make -j$(nproc) package/feeds/daede/dae/compile package/feeds/daede/daed/compile \
+          || make -j1 package/feeds/daede/dae/compile package/feeds/daede/daed/compile V=s
+
     - name: 编译固件
       run: |
         cd openwrt
