@@ -1,4 +1,4 @@
-name: Build FanchmWrt RE-SS-01 + daed
+name: Build FanchmWrt RE-SS-01 (26.11) + daed
 
 on:
   # 手动触发 (仅测试/紧急用); 正常只由 schedule 在上游有更新时自动构建
@@ -11,7 +11,8 @@ on:
 
 env:
   REPO_URL: https://github.com/fanchmwrt/fanchmwrt-snapshot.git
-  REPO_BRANCH: fanchmwrt-26.05
+  # 26.11 线: kernel 6.18, feeds 不锁 commit (跟随 openwrt master, golang 已是 1.27)
+  REPO_BRANCH: fanchmwrt-26.11
   CONFIG_FILE: config/re-ss-01-daed.config
   DIY_P1_SH: scripts/diy-part1.sh
   DIY_P2_SH: scripts/diy-part2.sh
@@ -90,6 +91,12 @@ jobs:
       run: |
         git clone --depth 1 --branch $REPO_BRANCH $REPO_URL openwrt
         ls -lh openwrt/ | head -30
+        # 确认真的在目标分支上, 别拿 26.05 的内核去跑 26.11 的配置
+        echo "===== 上游分支 / 提交 ====="
+        git -C openwrt rev-parse --abbrev-ref HEAD
+        git -C openwrt log -1 --format='%h %ad %s' --date=iso
+        echo "===== 内核 patchver (26.11 应为 6.18) ====="
+        grep -E '^KERNEL_PATCHVER' openwrt/target/linux/qualcommax/Makefile
 
     - name: 自定义 feeds (diy-part1, 加 daed 源)
       run: |
@@ -130,6 +137,7 @@ jobs:
         # vmlinux-btf 可 =y 也可 =m: 内核 BTF 生效后它只是备用安装包
         check "^CONFIG_PACKAGE_vmlinux-btf=[ym]"
         check "^CONFIG_PACKAGE_kmod-sched-bpf=y"
+        check "^CONFIG_PACKAGE_kmod-tun=y"
         check "^CONFIG_PACKAGE_v2ray-geoip=y"
         check "^CONFIG_KERNEL_CGROUPS=y"
         # RE-SS-01 必须是 12M 内核分区 (diy-part2 打的 HLOS12M 补丁), 否则 FIT 超限
@@ -170,7 +178,7 @@ jobs:
       uses: actions/upload-artifact@v4
       if: env.BUILD_STATUS == 'success'
       with:
-        name: fanchmwrt-re-ss-01-daed
+        name: fanchmwrt-re-ss-01-daed-2611
         path: firmware/*
 
     - name: 发布到 Release
@@ -178,10 +186,10 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ needs.check.outputs.tag }}
-        name: RE-SS-01 + daed ${{ needs.check.outputs.tag }} (内置daed, 12M内核)
+        name: RE-SS-01 + daed ${{ needs.check.outputs.tag }} (26.11 内核6.18, 内置daed, 12M内核)
         target_commitish: ${{ github.sha }}
         files: firmware/*
         body: |
-          JDCloud RE-SS-01 (AX1800 Pro) 一体固件, 基于 fanchmwrt-snapshot 26.05, 内置 daed 全家桶, 开箱即用。
+          JDCloud RE-SS-01 (AX1800 Pro) 一体固件, 基于 fanchmwrt-snapshot 26.11 (kernel 6.18), 内置 daed 全家桶, 开箱即用。
 
-          上游同步: fanchmwrt/fanchmwrt-snapshot@${{ needs.check.outputs.upstream }}
+          上游同步: fanchmwrt/fanchmwrt-snapshot@${{ needs.check.outputs.upstream }} (分支 fanchmwrt-26.11)

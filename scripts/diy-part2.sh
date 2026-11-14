@@ -3,6 +3,11 @@
 # 工作流调用位置: openwrt/ 目录下
 # 主要做: 主机名、IP、版本标识等轻量定制, 不动内核
 
+echo "===== 构建目标确认 ====="
+echo "branch: $(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+echo "commit: $(git log -1 --format='%h %s' 2>/dev/null || echo unknown)"
+echo "kernel: $(grep -E '^KERNEL_PATCHVER' target/linux/qualcommax/Makefile 2>/dev/null || echo unknown)"
+
 # 1. 默认 LAN IP 改成 192.168.100.1
 sed -i 's/192\.168\.1\.1/192.168.100.1/g' package/base-files/files/bin/config_generate
 if ! grep -q '192\.168\.100\.1' package/base-files/files/bin/config_generate; then
@@ -57,14 +62,13 @@ if grep -q "'FanchmWrt'" package/fcm/luci-theme-fanchmwrt/htdocs/luci-static/res
 fi
 echo "OK: 标签页/登录窗口标题 -> NatserverWrt"
 
-# 7. 放开 GOTOOLCHAIN (2026-11-13 run 43382238766 失败的直接原因)
-#    上游 dae/daed 的 go.mod 已经写成 `go 1.27.0`, 而 26.05 分支固定的 packages feed
-#    只到 golang 1.26.3 (GO_DEFAULT_VERSION:=1.26, 没有 golang1.27 包); 更关键的是
-#    golang-package.mk 的 GO_PKG_BUILD_VARS 里硬编码 GOTOOLCHAIN=local, 于是 go 拒绝
-#    自动升级工具链, 直接报:
+# 7. 放开 GOTOOLCHAIN (26.05 线 run 43382238766 失败的直接原因)
+#    26.05 固定的 packages feed 只到 golang 1.26.3, 而 dae/daed 的 go.mod 写的是
+#    `go 1.27.0`, 加上 golang-package.mk 硬编码 GOTOOLCHAIN=local, 于是直接报:
 #      go: go.mod requires go >= 1.27.0 (running go 1.26.3; GOTOOLCHAIN=local)
-#    改成 auto 后 1.26.3 会按需从 module proxy 拉 go1.27.x 工具链来编 dae/daed,
-#    其余 Go 包仍旧用 1.26.3, 不用动 packages feed 的版本, 改动面最小。
+#    26.11 的 feeds 不锁 commit, 默认 golang 已经是 1.27, 正常情况下用不到这段;
+#    但 feed 会漂移, 留着这段当保险: 有 local 就改成 auto, 改成 auto 后 1.2x 会
+#    按需拉新工具链, 其余 Go 包照旧。
 GPM=feeds/packages/lang/golang/golang-package.mk
 if [ ! -f "$GPM" ]; then
   echo "ERROR: 找不到 $GPM (feeds install 未完成?)" >&2; exit 1
@@ -72,9 +76,13 @@ fi
 if grep -q 'GOTOOLCHAIN=local' "$GPM"; then
   sed -i 's/GOTOOLCHAIN=local/GOTOOLCHAIN=auto/g' "$GPM"
 fi
-if ! grep -q 'GOTOOLCHAIN=auto' "$GPM"; then
-  echo "ERROR: GOTOOLCHAIN=auto 补丁未生效 ($GPM)" >&2; exit 1
+if grep -q 'GOTOOLCHAIN=auto' "$GPM"; then
+  echo "OK: GOTOOLCHAIN -> auto"
+elif grep -q 'GOTOOLCHAIN' "$GPM"; then
+  echo "WARN: GOTOOLCHAIN 存在但既非 local 也非 auto: $(grep -o 'GOTOOLCHAIN=[a-z]*' "$GPM" | head -1)"
+else
+  echo "WARN: golang-package.mk 里没有 GOTOOLCHAIN 设置 (go 默认 auto, 可接受)"
 fi
-echo "OK: GOTOOLCHAIN -> $(grep -o 'GOTOOLCHAIN=[a-z]*' "$GPM" | head -1)"
+echo "go 默认版本: $(grep -E '^GO_DEFAULT_VERSION' feeds/packages/lang/golang/golang-values.mk 2>/dev/null || echo unknown)"
 
 echo "diy-part2 done"
