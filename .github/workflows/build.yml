@@ -1,4 +1,4 @@
-name: Build FanchmWrt RE-SS-01 (26.11) + daed
+name: Build FanchmWrt RE-SS-01 (26.11) + honk
 
 on:
   # 手动触发 (仅测试/紧急用); 正常只由 schedule 在上游有更新时自动构建
@@ -13,7 +13,7 @@ env:
   REPO_URL: https://github.com/fanchmwrt/fanchmwrt-snapshot.git
   # 26.11 线: kernel 6.18, feeds 不锁 commit (跟随 openwrt master, golang 已是 1.27)
   REPO_BRANCH: fanchmwrt-26.11
-  CONFIG_FILE: config/re-ss-01-daed.config
+  CONFIG_FILE: config/re-ss-01-honk.config
   DIY_P1_SH: scripts/diy-part1.sh
   DIY_P2_SH: scripts/diy-part2.sh
   TZ: Asia/Shanghai
@@ -119,7 +119,7 @@ jobs:
         echo "===== 内核 patchver (26.11 应为 6.18) ====="
         grep -E '^KERNEL_PATCHVER' openwrt/target/linux/qualcommax/Makefile
 
-    - name: 自定义 feeds (diy-part1, 加 daed 源)
+    - name: 自定义 feeds (diy-part1, 加 honk 源)
       run: |
         chmod +x $DIY_P1_SH
         cd openwrt
@@ -141,8 +141,8 @@ jobs:
         cp ../$CONFIG_FILE .config
         make defconfig
         echo "===== 生效的关键配置 ====="
-        grep -E "jdcloud_re-ss-01|TARGET_qualcommax|BPF_TOOLCHAIN|DEVEL=|PACKAGE_(dae|daed|luci-app-daede)|KERNEL_DEBUG_INFO|KERNEL_BPF_EVENTS|KERNEL_XDP_SOCKETS|v2ray-geo|vmlinux-btf|kmod-sched-bpf|kmod-veth" .config || true
-        echo "===== 主机 clang (BPF_TOOLCHAIN_HOST 要 >=12) ====="
+        grep -E "jdcloud_re-ss-01|TARGET_qualcommax|BPF_TOOLCHAIN|DEVEL=|PACKAGE_(honk|luci-app-honk|luci-i18n-honk)|KERNEL_DEBUG_INFO|KERNEL_BPF_EVENTS|KERNEL_XDP_SOCKETS|v2ray-geo|kmod-sched-bpf|kmod-veth|kmod-nft-queue" .config || true
+        echo "===== 主机 clang (BPF_TOOLCHAIN_HOST 要 >=15) ====="
         which clang llc opt llvm-strip; clang --version | head -2
         echo "===== defconfig 后硬检查 (任一失败立即退出, 不浪费编译时间) ====="
         fail=0
@@ -152,13 +152,18 @@ jobs:
         check "^CONFIG_BPF_TOOLCHAIN_HOST=y"
         check "^CONFIG_KERNEL_DEBUG_INFO=y"
         check "^CONFIG_KERNEL_DEBUG_INFO_BTF=y"
-        check "^CONFIG_PACKAGE_dae=y"
-        check "^CONFIG_PACKAGE_daed=y"
-        check "^CONFIG_PACKAGE_luci-app-daede=y"
-        # vmlinux-btf 可 =y 也可 =m: 内核 BTF 生效后它只是备用安装包
-        check "^CONFIG_PACKAGE_vmlinux-btf=[ym]"
+        # 换了引擎: honk 取代 dae/daed, 这三项是本次改动的核心
+        check "^CONFIG_PACKAGE_honk=y"
+        check "^CONFIG_PACKAGE_luci-app-honk=y"
+        check "^CONFIG_PACKAGE_kmod-nft-queue=y"
+        # 旧引擎必须彻底不在, 否则两个 eBPF 程序抢同一批 hook
+        if grep -qE "^CONFIG_PACKAGE_(dae|daed|luci-app-daede)=y" .config; then
+          echo "FAIL: 仍选中了 dae/daed, 与 honk 冲突"; fail=1
+        else
+          echo "OK: 已无 dae/daed"
+        fi
         check "^CONFIG_PACKAGE_kmod-sched-bpf=y"
-        check "^CONFIG_PACKAGE_kmod-tun=y"
+        check "^CONFIG_PACKAGE_kmod-veth=y"
         check "^CONFIG_PACKAGE_v2ray-geoip=y"
         check "^CONFIG_KERNEL_CGROUPS=y"
         # RE-SS-01 必须是 12M 内核分区 (diy-part2 打的 HLOS12M 补丁), 否则 FIT 超限
@@ -189,17 +194,17 @@ jobs:
       run: |
         cd openwrt
         mkdir -p ../firmware
-        # 只保留 RE-SS-01 相关固件 + dae/daed 包, 避免 artifact 过大
+        # 只保留 RE-SS-01 相关固件 + honk 包, 避免 artifact 过大
         find bin/targets/qualcommax/ipq60xx/ -type f \( -name "*re-ss-01*" -o -name "*.manifest" -o -name "config.buildinfo" \) -exec cp -v {} ../firmware/ \;
-        # 打包 dae/daed 的 ipk/apks (snapshot 默认是 apk)
-        find bin/packages/ -type f \( -name "dae_*" -o -name "daed_*" -o -name "luci-app-daede*" -o -name "luci-i18n-daede*" -o -name "vmlinux-btf*" -o -name "v2ray-geo*" \) 2>/dev/null -exec cp -v {} ../firmware/ \; || true
+        # 打包 honk 的 ipk/apks (snapshot 默认是 apk)
+        find bin/packages/ -type f \( -name "honk_*" -o -name "luci-app-honk*" -o -name "luci-i18n-honk*" -o -name "v2ray-geo*" \) 2>/dev/null -exec cp -v {} ../firmware/ \; || true
         ls -lh ../firmware/
 
     - name: 上传固件到 Artifact
       uses: actions/upload-artifact@v4
       if: env.BUILD_STATUS == 'success'
       with:
-        name: fanchmwrt-re-ss-01-daed-2611
+        name: fanchmwrt-re-ss-01-honk-2611
         path: firmware/*
 
     - name: 发布到 Release
@@ -207,10 +212,35 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ needs.check.outputs.tag }}
-        name: RE-SS-01 + daed ${{ needs.check.outputs.tag }} (26.11 内核6.18, 内置daed, 12M内核)
+        name: RE-SS-01 + honk ${{ needs.check.outputs.tag }} (26.11 内核6.18, 内置honk, 12M内核)
         target_commitish: ${{ github.sha }}
         files: firmware/*
         body: |
-          JDCloud RE-SS-01 (AX1800 Pro) 一体固件, 基于 fanchmwrt-snapshot 26.11 (kernel 6.18), 内置 daed 全家桶, 开箱即用。
+          JDCloud RE-SS-01 (AX1800 Pro) 一体固件, 基于 fanchmwrt-snapshot 26.11 (kernel 6.18)。
+          代理引擎已由 dae/daed 换成 **honk** (dae 的 Rust 重写版), 内置 LuCI 管理页与 doona 面板, 开箱即用。
 
           上游同步: fanchmwrt/fanchmwrt-snapshot@${{ needs.check.outputs.upstream }} (分支 fanchmwrt-26.11)
+
+          ## 本次更新
+
+          - **代理引擎换血**: 移除 dae / daed / luci-app-daede, 改为 honk 2026.11.12 + luci-app-honk
+            - honk 走 eBPF 内核态分流, 直连流量几乎零开销, 比 dae 更省内存
+            - 核心自带 doona Web 面板 (`/usr/share/doona`), 支持订阅、节点分组、路由与 DNS 可视化调试
+            - LuCI 页面支持订阅导入 / 粘贴节点 / 直接导入旧 dae 配置
+          - **内核侧不变**: `CONFIG_DEBUG_INFO_BTF=y`, 运行时 `/sys/kernel/btf/vmlinux` 直接做 CO-RE 重定位
+          - **依赖补齐**: kmod-nft-queue、kmod-sched-bpf、kmod-veth、sqlite3-cli、coreutils-stat、usign、jsonfilter、v2ray-geoip/geosite
+          - **分区不变**: RE-SS-01 内核分区 12 MiB (KERNEL_SIZE 12288k), rootfs 300 MiB
+          - **定制不变**: LAN 192.168.100.1、主机名 NatserverWrt、dnsmasq-full
+
+          ## 刷机说明
+
+          - Web 直刷 (原厂/京东云 U-Boot): `*squashfs-factory.bin`
+          - 已刷 OpenWrt 升级: `*squashfs-sysupgrade.bin`
+          - 从 26.05 (kernel 6.12) 跨到 26.11 (kernel 6.18) 属跨大版本, **不建议保留配置升级**;
+            确实要保留, 先备份 `/etc/config/honk` 与 `/etc/honk/`
+          - 首次进入 LuCI 后到「网络 - Honk」启动服务, 再到 doona 面板添加节点/订阅
+
+          ## 已知事项
+
+          - honk 为 beta 阶段项目, 上游更新频繁 (2026-11 仍在日更)
+          - honk 与 dae 不能共存, 本固件不含任何 dae/daed 组件

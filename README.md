@@ -2,8 +2,8 @@
 
 ## 内置软件
 
-- **eBPF / BTF 内核支持**：已开启 BTF、XDP、BPF Events、CGROUPS、BPF 工具链，并内置 daed 所需内核模块（kmod-sched-core / kmod-sched-bpf / kmod-veth / kmod-xdp-sockets-diag）；
-- **加强版 daed 已预装**：刷机即用，无需手动安装。
+- **eBPF / BTF 内核支持**：已开启 BTF、XDP、BPF Events、CGROUPS、BPF 工具链，并内置 honk 所需内核模块（kmod-sched-core / kmod-sched-bpf / kmod-veth / kmod-nft-queue）；
+- **honk 已预装**：dae 的 Rust 重写版，eBPF 内核态分流，核心自带 doona Web 面板，刷机即用；本固件不含 dae/daed。
 
 ## 刷机流程
 

@@ -29,11 +29,11 @@ fi
 
 # 4. 固件版本描述 (LuCI 概览/登录窗口的 Firmware Version)
 if [ -f package/base-files/files/etc/openwrt_release ]; then
-  echo "DISTRIB_DESCRIPTION='NatserverWrt snapshot + daed (RE-SS-01)'" >> package/base-files/files/etc/openwrt_release
+  echo "DISTRIB_DESCRIPTION='NatserverWrt snapshot + honk (RE-SS-01)'" >> package/base-files/files/etc/openwrt_release
 fi
 
-# 4. 确保 golang 版本足够新 (dae 需要 go 1.21+), feeds 自带一般够, 这里只打印确认
-./scripts/feeds list | grep -E "^(dae|daed|luci-app-daede|vmlinux-btf|v2ray-geo)" || echo "WARN: dae 相关 feed 未列出, 请检查 diy-part1 是否生效"
+# 4. 确认 honk feed 已就位 (diy-part1 加的是 kenzok8/openwrt-honk)
+./scripts/feeds list | grep -E "^(honk|luci-app-honk|luci-app-honk-zh-cn|v2ray-geo)" || echo "WARN: honk 相关 feed 未列出, 请检查 diy-part1 是否生效"
 
 # 5. RE-SS-01 内核分区扩到 12M (照抄 istoreos 方案: HLOS12M GPT + U-Boot /big.html)
 #    只改 Device/jdcloud_re-ss-01 块, 不动 re-cs-02/re-cs-07/nn6000 的 6144k
