@@ -24,7 +24,7 @@ permissions:
 jobs:
   # 检查上游 fanchmwrt-snapshot 是否有新提交 (只在定时触发时跳过判断, 手动/push 总是构建)
   check:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       build: ${{ steps.check.outputs.build }}
       upstream: ${{ steps.check.outputs.upstream }}
@@ -58,7 +58,11 @@ jobs:
     needs: check
     if: needs.check.outputs.build == 'true'
 
-    runs-on: ubuntu-22.04
+    # 24.04 自带 clang 18; kernel 6.18 的 bpf-headers 硬要求 clang >= 15,
+    # 22.04 的 clang 14 会在 oldconfig 阶段直接 *** C compiler is too old 报错退出
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout 本仓库(工作流+配置)
@@ -72,19 +76,36 @@ jobs:
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/powershell \
           /usr/local/share/swift /usr/local/share/edge_driver /opt/hostedtoolcache \
           /usr/local/lib/node_modules /usr/local/typescript /usr/local/go /home/linuxbrew \
-          /usr/local/.cache /etc/apt/sources.list.d/*
+          /usr/local/.cache
+        # 24.04 的软件源是 /etc/apt/sources.list.d/ubuntu.sources (deb822), 不能整目录删,
+        # 只清掉第三方的 .list, 否则 apt-get update 会找不到任何源
+        sudo find /etc/apt/sources.list.d -maxdepth 1 -name "*.list" -delete
         sudo docker image prune --all --force 2>/dev/null || true
         sudo -E apt-get -qq update
-        sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+        PKGS="ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
           bzip2 ccache clang cmake cpio curl device-tree-compiler ecj fastjar flex gawk gettext git gperf haveged \
           help2man intltool libacl1-dev libattr1-dev libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev \
           libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev \
           libtool libz-dev lld llvm lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf \
           python3 python3-pip python3-ply python3-docutils qemu-utils rsync squashfs-tools subversion \
-          swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd yasm zlib1g-dev zstd
+          swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd yasm zlib1g-dev zstd"
+        sudo -E apt-get -qq install -y $PKGS || {
+          echo "::warning::批量安装失败, 改为逐个安装并跳过 24.04 已移除的包"
+          for p in $PKGS; do sudo -E apt-get -qq install -y "$p" || echo "跳过缺失包: $p"; done
+        }
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
         sudo timedatectl set-timezone "$TZ"
+        # kernel 6.18 的 bpf-headers 在 oldconfig 阶段就检查编译器版本, clang < 15 直接退不出构建,
+        # 这里提前断言, 别等 1.5 小时才发现
+        echo "===== 主机 clang ====="
+        clang --version | head -2
+        CM=$(clang -dumpversion | cut -d. -f1)
+        if [ "$CM" -lt 15 ]; then
+          echo "ERROR: 主机 clang $CM < 15, kernel 6.18 的 bpf-headers 会拒绝编译" >&2
+          exit 1
+        fi
+        echo "OK: 主机 clang $CM >= 15"
         df -h
 
     - name: 克隆 fanchmwrt-snapshot 源码
