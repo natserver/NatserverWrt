@@ -196,8 +196,8 @@ jobs:
         mkdir -p ../firmware
         # 只保留 RE-SS-01 相关固件 + honk 包, 避免 artifact 过大
         find bin/targets/qualcommax/ipq60xx/ -type f \( -name "*re-ss-01*" -o -name "*.manifest" -o -name "config.buildinfo" \) -exec cp -v {} ../firmware/ \;
-        # 打包 honk 的 ipk/apks (snapshot 默认是 apk)
-        find bin/packages/ -type f \( -name "honk_*" -o -name "luci-app-honk*" -o -name "luci-i18n-honk*" -o -name "v2ray-geo*" \) 2>/dev/null -exec cp -v {} ../firmware/ \; || true
+        # 打包 honk 的 ipk/apks (snapshot 默认是 apk; apk 文件名是 honk-<ver>-r1.apk, 用连字符)
+        find bin/packages/ -type f \( -name "honk-*" -o -name "luci-app-honk-*" -o -name "luci-i18n-honk-*" -o -name "v2ray-geo*" \) 2>/dev/null -exec cp -v {} ../firmware/ \; || true
         ls -lh ../firmware/
 
     - name: 上传固件到 Artifact
