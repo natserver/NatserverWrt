@@ -3,3 +3,6 @@ openwrt/
 *.bin
 *.trx
 *.img
+
+# 刷机工具模板需要随仓库分发 (17KB 的 GPT 模板), 不受上面 *.bin 规则影响
+!files/gpt/*.bin
